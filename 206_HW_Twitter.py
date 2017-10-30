@@ -90,16 +90,16 @@ def getWithCaching(searchTerm):
         return cache_diction[searchTerm]
     else:
         uprint ("Making request for search...")
-        #try:
-        cache_diction[searchTerm] = api.search(q = searchTerm, count = 5)
-        writeFile = open(cache_fname, 'w')
-        dumpedCacheDiction = json.dumps(cache_diction)
-        writeFile.write(dumpedCacheDiction)
-        writeFile.close()
-        return cache_diction[searchTerm]
-        #except:
-        #    uprint ("Error. Search wasn't in cache and not valid.")
-        #    return None
+        try:
+            cache_diction[searchTerm] = api.search(q = searchTerm, count = 5)
+            writeFile = open(cache_fname, 'w')
+            dumpedCacheDiction = json.dumps(cache_diction)
+            writeFile.write(dumpedCacheDiction)
+            writeFile.close()
+            return cache_diction[searchTerm]
+        except:
+            uprint ("Error. Search wasn't in cache and not valid.")
+            return None
 
 ## 3. Using a loop, invoke your function, save the return value in a variable, and explore the
 ##		data you got back!
