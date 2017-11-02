@@ -120,6 +120,7 @@ for row in rows:
 # Select the author of all of the tweets (the full rows/tuples of information) that have been retweeted MORE
 # than 2 times, and fetch them into the variable more_than_2_rts.
 # Print the results
+# stored into variable more_than_2_rts
 more_than_2_rts=[]
 for row in rows:
     if (row[4] >= 2):
