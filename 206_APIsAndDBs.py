@@ -31,6 +31,7 @@ def uprint(*objects, sep=' ', end='\n', file=sys.stdout):
     else:
         f = lambda obj: str(obj).encode(enc, errors='backslashreplace').decode(enc)
         print(*map(f, objects), sep=sep, end=end, file=file)
+
 ##### TWEEPY SETUP CODE:
 # Authentication information should be in a twitter_info file...
 consumer_key = twitter_info.consumer_key
@@ -66,23 +67,83 @@ except:
     CACHE_DICTION = {}
 conn = sqlite3.connect("206_APIsAndDBs.sqlite")
 cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS Tweets")
+cur.execute("""CREATE TABLE Tweets (
+	`tweet_id`	TEXT NOT NULL,
+	`text`	TEXT NOT NULL,
+	`user_posted`	TEXT,
+	`time_posted`	DATETIME NOT NULL,
+	`retweets`	INTEGER,
+	PRIMARY KEY(`tweet_id`)
+    FOREIGN KEY ('user_posted') REFERENCES Users('user_id')
+)""")
+cur.execute("DROP TABLE IF EXISTS Users")
+cur.execute("""CREATE TABLE Users (
+	`user_id`	TEXT NOT NULL,
+	`screen_name`	TEXT NOT NULL,
+	`num_favs`	INTEGER NOT NULL,
+	`description`	DATETIME NOT NULL,
+	PRIMARY KEY(`user_id`)
+)""")
+rows = cur.execute("SELECT * FROM Tweets")
+rows = cur.fetchall()
+uprint ("THIS IS THE ROWS THAT WE ARE SELECTING")
+for row in rows:
+    uprint (row)
 # define function to grab mentioned users
 def scrapeMentionedUsers(username):
     mentionedUsers = []
     for tweet in CACHE_DICTION[username]:
         for user in tweet['entities']['user_mentions']:
-            mentionedUsers.append(user['id'])
+                mentionedUsers.append(user['id'])
+    return mentionedUsers
+## function checks if user is in users table
+def checkUser(username):
+    emptylist = []
+    cur.execute("SELECT * FROM Users")
+    conn.commit()
+    rows = cur.fetchall()
+    conn.commit()
+    if (rows == []):
+        return True
+    if rows == emptylist:
+        return True
+    for row in rows:
+        if (username == row[0]):
+            return False
+        else:
+            return True
+    return True
+
+## function updates users table
+def updateUsersTable(username):
+    allUsers = scrapeMentionedUsers(username)
+    usernameID = api.get_user(username)['id']
+    allUsers.append(usernameID)
+    allUsers = list(set(allUsers))
+    for user in allUsers:
+        print ("User {} got {} from test".format(user,checkUser(user)))
+        if checkUser(user) == True:
+            userInfo = api.get_user(user)
+            user_id = userInfo['id']
+            screen_name = userInfo['screen_name']
+            num_favs = userInfo['favourites_count']
+            description = userInfo['description']
+            cur.execute("INSERT INTO Users VALUES (?,?,?,?)", (user_id, screen_name, num_favs, description))
+            conn.commit()
+            print ("\nCursor executed entering Users for user: {}\n".format(user))
+    return
+## function to update tweets table
 def updateTweetsTable(username):
-    cur.execute("DROP TABLE IF EXISTS Tweets")
-    cur.execute("""CREATE TABLE Tweets (
-    	`tweet_id`	INTEGER NOT NULL,
-    	`author`	TEXT NOT NULL,
-    	`time_posted`	TEXT NOT NULL,
-    	`tweet_text`	TEXT NOT NULL,
-    	`retweets`	INTEGER,
-    	PRIMARY KEY(`tweet_id`)
-    )""")
-# Define your function get_user_tweets here:
+        for tweet in CACHE_DICTION[username]:
+            tweet_id = tweet['id']
+            user_posted = tweet['user']['id']
+            time_posted = tweet['created_at']
+            text = tweet['text']
+            retweets = tweet['retweet_count']
+            cur.execute("INSERT INTO Tweets VALUES (?,?,?,?,?)", (tweet_id, text, user_posted, time_posted, retweets))
+
+# Define your function get_user_tweets here
 def get_user_tweets(username):
     if username in CACHE_DICTION:
         uprint ("Grabbing data from cache...")
@@ -99,12 +160,13 @@ def get_user_tweets(username):
         except:
             uprint ("Error. Search wasn't in cache and not valid.")
             return None
-conn.commit()
-conn.close()
+
 # Write an invocation to the function for the "umich" user timeline and
 # save the result in a variable called umich_tweets:
+umich_tweets = get_user_tweets("espn")
+updateUsersTable('espn')
+updateTweetsTable('espn')
 
-umich_tweets = get_user_tweets("@umich")
 
 ## Task 2 - Creating database and loading data into database
 ## You should load into the Users table:
@@ -279,7 +341,7 @@ class Task3(unittest.TestCase):
 	def test_joined_result(self):
 		self.assertEqual(type(joined_data[0]),type(("hi","bye")),"Testing that an element in joined_result is a tuple")
 
-
-
+conn.commit()
+conn.close()
 if __name__ == "__main__":
 	unittest.main(verbosity=2)
