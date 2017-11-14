@@ -67,29 +67,25 @@ except:
     CACHE_DICTION = {}
 conn = sqlite3.connect("206_APIsAndDBs.sqlite")
 cur = conn.cursor()
-cur.execute("DROP TABLE IF EXISTS Tweets")
-cur.execute("""CREATE TABLE Tweets (
-	`tweet_id`	TEXT NOT NULL,
-	`text`	TEXT NOT NULL,
-	`user_posted`	TEXT,
-	`time_posted`	DATETIME NOT NULL,
-	`retweets`	INTEGER,
-	PRIMARY KEY(`tweet_id`)
-    FOREIGN KEY ('user_posted') REFERENCES Users('user_id')
-)""")
-cur.execute("DROP TABLE IF EXISTS Users")
-cur.execute("""CREATE TABLE Users (
-	`user_id`	TEXT NOT NULL,
-	`screen_name`	TEXT NOT NULL,
-	`num_favs`	INTEGER NOT NULL,
-	`description`	DATETIME NOT NULL,
-	PRIMARY KEY(`user_id`)
-)""")
-rows = cur.execute("SELECT * FROM Tweets")
-rows = cur.fetchall()
-uprint ("THIS IS THE ROWS THAT WE ARE SELECTING")
-for row in rows:
-    uprint (row)
+try:
+    cur.execute("""CREATE TABLE Tweets (
+    	`tweet_id`	TEXT NOT NULL,
+    	`text`	TEXT NOT NULL,
+    	`user_posted`	TEXT,
+    	`time_posted`	DATETIME NOT NULL,
+    	`retweets`	INTEGER,
+    	PRIMARY KEY(`tweet_id`)
+        FOREIGN KEY ('user_posted') REFERENCES Users('user_id')
+    )""")
+    cur.execute("""CREATE TABLE Users (
+    	`user_id`	TEXT NOT NULL,
+    	`screen_name`	TEXT NOT NULL,
+    	`num_favs`	INTEGER NOT NULL,
+    	`description`	DATETIME NOT NULL,
+    	PRIMARY KEY(`user_id`)
+    )""")
+except:
+    pass
 # define function to grab mentioned users
 def scrapeMentionedUsers(username):
     mentionedUsers = []
@@ -99,30 +95,26 @@ def scrapeMentionedUsers(username):
     return mentionedUsers
 ## function checks if user is in users table
 def checkUser(username):
-    emptylist = []
+    conn = sqlite3.connect("206_APIsAndDBs.sqlite")
+    cur = conn.cursor()
     cur.execute("SELECT * FROM Users")
-    conn.commit()
     rows = cur.fetchall()
-    conn.commit()
-    if (rows == []):
-        return True
-    if rows == emptylist:
-        return True
     for row in rows:
-        if (username == row[0]):
+        if (str(row[0]) == str(username)):
             return False
-        else:
-            return True
-    return True
+    else:
+        return True
+    conn.close()
 
 ## function updates users table
 def updateUsersTable(username):
+    conn = sqlite3.connect("206_APIsAndDBs.sqlite")
+    cur = conn.cursor()
     allUsers = scrapeMentionedUsers(username)
     usernameID = api.get_user(username)['id']
     allUsers.append(usernameID)
-    allUsers = list(set(allUsers))
+    #allUsers = list(set(allUsers))
     for user in allUsers:
-        print ("User {} got {} from test".format(user,checkUser(user)))
         if checkUser(user) == True:
             userInfo = api.get_user(user)
             user_id = userInfo['id']
@@ -131,22 +123,32 @@ def updateUsersTable(username):
             description = userInfo['description']
             cur.execute("INSERT INTO Users VALUES (?,?,?,?)", (user_id, screen_name, num_favs, description))
             conn.commit()
-            print ("\nCursor executed entering Users for user: {}\n".format(user))
+    conn.close()
     return
 ## function to update tweets table
 def updateTweetsTable(username):
-        for tweet in CACHE_DICTION[username]:
+    conn = sqlite3.connect("206_APIsAndDBs.sqlite")
+    cur = conn.cursor()
+    for tweet in CACHE_DICTION[username]:
+        try:
             tweet_id = tweet['id']
             user_posted = tweet['user']['id']
             time_posted = tweet['created_at']
             text = tweet['text']
             retweets = tweet['retweet_count']
             cur.execute("INSERT INTO Tweets VALUES (?,?,?,?,?)", (tweet_id, text, user_posted, time_posted, retweets))
+            conn.commit()
+        except:
+            pass
+    conn.close()
+    return
 
 # Define your function get_user_tweets here
 def get_user_tweets(username):
     if username in CACHE_DICTION:
         uprint ("Grabbing data from cache...")
+        updateTweetsTable(username)
+        updateUsersTable(username)
         return CACHE_DICTION[username]
     else:
         uprint ("Making request for search...")
@@ -156,6 +158,8 @@ def get_user_tweets(username):
             dumpedCacheDiction = json.dumps(CACHE_DICTION)
             writeFile.write(dumpedCacheDiction)
             writeFile.close()
+            updateTweetsTable(username)
+            updateUsersTable(username)
             return CACHE_DICTION[username]
         except:
             uprint ("Error. Search wasn't in cache and not valid.")
@@ -163,9 +167,12 @@ def get_user_tweets(username):
 
 # Write an invocation to the function for the "umich" user timeline and
 # save the result in a variable called umich_tweets:
-umich_tweets = get_user_tweets("espn")
-updateUsersTable('espn')
-updateTweetsTable('espn')
+
+umich_tweets = get_user_tweets("@umich")
+# making sure that the Users and Tweets table keeps populating with other tries
+espn_tweets = get_user_tweets("@espn")
+other_tweets = get_user_tweets("@trvisxx")
+
 
 
 ## Task 2 - Creating database and loading data into database
@@ -204,49 +211,84 @@ updateTweetsTable('espn')
 # Make a query to select all of the records in the Users database.
 # Save the list of tuples in a variable called users_info.
 
-users_info = True
+users_info = cur.execute("SELECT * FROM Users")
+users_info = cur.fetchall()
 
 # Make a query to select all of the user screen names from the database.
 # Save a resulting list of strings (NOT tuples, the strings inside them!)
 # in the variable screen_names. HINT: a list comprehension will make
 # this easier to complete!
-screen_names = True
-
+screen_names2 = cur.execute("SELECT screen_name FROM Users")
+screen_names2 = cur.fetchall()
+screen_names = []
+for x in screen_names2:
+    screen_names.append(str(x[0]))
 
 # Make a query to select all of the tweets (full rows of tweet information)
 # that have been retweeted more than 10 times. Save the result
 # (a list of tuples, or an empty list) in a variable called retweets.
-retweets = True
-
+retweets = cur.execute("SELECT * FROM Tweets WHERE retweets > 10")
+retweets = cur.fetchall()
 
 # Make a query to select all the descriptions (descriptions only) of
 # the users who have favorited more than 500 tweets. Access all those
 # strings, and save them in a variable called favorites,
 # which should ultimately be a list of strings.
-favorites = True
-
+favorites2 = cur.execute("SELECT description FROM Users WHERE num_favs > 500")
+favorites2 = cur.fetchall()
+favorites = []
+for x in favorites2:
+    favorites.append(str(x[0]))
 
 # Make a query using an INNER JOIN to get a list of tuples with 2
 # elements in each tuple: the user screenname and the text of the
 # tweet. Save the resulting list of tuples in a variable called joined_data2.
-joined_data = True
-
+joined_data = cur.execute("SELECT Users.screen_name, Tweets.text FROM Users INNER JOIN Tweets ON Users.user_id = Tweets.user_posted")
+joined_data = cur.fetchall()
+uprint (joined_data)
+print ('\n\n\n')
 # Make a query using an INNER JOIN to get a list of tuples with 2
 # elements in each tuple: the user screenname and the text of the
 # tweet in descending order based on retweets. Save the resulting
 # list of tuples in a variable called joined_data2.
 
-joined_data2 = True
-
+joined_data2 = cur.execute("SELECT Users.screen_name, Tweets.text FROM Users INNER JOIN Tweets ON Users.user_id = Tweets.user_posted ORDER BY Tweets.retweets DESC")
+joined_data2 = cur.fetchall()
 
 ### IMPORTANT: MAKE SURE TO CLOSE YOUR DATABASE CONNECTION AT THE END
 ### OF THE FILE HERE SO YOU DO NOT LOCK YOUR DATABASE (it's fixable,
 ### but it's a pain). ###
 
+conn.commit()
+conn.close()
 ###### TESTS APPEAR BELOW THIS LINE ######
 ###### Note that the tests are necessary to pass, but not sufficient --
 ###### must make sure you've followed the instructions accurately!
 ######
+
+# function to check if there are any duplicate users
+def test_UsersTable():
+    conn = sqlite3.connect("206_APIsAndDBs.sqlite")
+    cur = conn.cursor()
+    data = cur.execute("SELECT user_id FROM Users")
+    data = cur.fetchall()
+    dict_count = {}
+    for row in data:
+        dict_count[row[0]] = dict_count.get(row[0], 0) + 1
+    sorted_dict = sorted(dict_count.values())
+    for x in sorted_dict:
+        if (x > 1):
+            print ("\nError with Users table. Duplicate users are present.")
+    else:
+        print ("\nPassed testing Users Table --- There are no duplicates in the table.")
+    conn.close()
+    return sorted_dict
+
+print ("""\n----------------------------------------------------------------------\n
+Created own test to verify there are duplicate users in the Users table: """)
+test_UsersTable()
+print ("\n----------------------------------------------------------------------")
+
 print("\n\nBELOW THIS LINE IS OUTPUT FROM TESTS:\n")
 
 
@@ -341,7 +383,8 @@ class Task3(unittest.TestCase):
 	def test_joined_result(self):
 		self.assertEqual(type(joined_data[0]),type(("hi","bye")),"Testing that an element in joined_result is a tuple")
 
-conn.commit()
-conn.close()
+
+
+
 if __name__ == "__main__":
 	unittest.main(verbosity=2)
