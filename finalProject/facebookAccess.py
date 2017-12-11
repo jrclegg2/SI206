@@ -108,6 +108,7 @@ class Event():
             self.long = None
 
 def createSQL():
+    """Creates table with sql, NO parameters, NO return"""
     conn = sqlite3.connect("206finalProject.sqlite")
     cur = conn.cursor()
     try:
@@ -116,6 +117,7 @@ def createSQL():
             `created_time`	TEXT NOT NULL,
             'like_count' TEXT NOT NULL,
             'comment_count' TEXT NOT NULL,
+            'weather' TEXT,
             PRIMARY KEY(`id`)
         )""")
     except:
@@ -123,6 +125,7 @@ def createSQL():
     conn.commit()
     conn.close()
 def sqlTable(post_insts):
+    """Parameters: valid list of post instances, Return: None, Use: fills in sql table with facebook information"""
     conn = sqlite3.connect("206finalProject.sqlite")
     cur = conn.cursor()
     for x in post_insts:
@@ -131,36 +134,41 @@ def sqlTable(post_insts):
             created_time = x.created
             like_count = x.like_count
             comment_count = x.comment_count
-            cur.execute("INSERT INTO Facebook VALUES (?,?,?,?)", (id, created_time, like_count, comment_count))
+            cur.execute("INSERT INTO Facebook VALUES (?,?,?,?,?)", (id, created_time, like_count, comment_count,""))
             conn.commit()
         except:
             pass
     conn.close()
-def makeEventsInstances():
-    baseurl = 'https://graph.facebook.com/me/events'
-    events = makeFacebookRequest(baseurl, {'limit':100}).text.encode('utf-8')
-    my_events = json.loads(events)
-    event_insts = [Event(x) for x in my_events['data']]
-    return event_insts
-def makeMap(event_insts):
-    latitude = []
-    longitude = []
-    for x in event_insts:
-        if (x.lat != None) and (x.long != None):
-            latitude.append(x.lat)
-            longitude.append(x.long)
-    gmap = gmplot.GoogleMapPlotter(latitude[0], longitude[0], 16)
-    gmap.plot(latitude, longitude, '#FF6666', edge_width = 75)
-    #gmap.scatter(latitude, longitude, '#FF6666', marker = True)
-    gmap.draw('eventsmap.html')
-    return
+# def makeEventsInstances():
+#     """Parameters: none, Return: list of event instances, Use: makes a facebook request for user events, creating instances of the class Events"""
+#     baseurl = 'https://graph.facebook.com/me/events'
+#     events = makeFacebookRequest(baseurl, {'limit':100}).text.encode('utf-8')
+#     my_events = json.loads(events)
+#     event_insts = [Event(x) for x in my_events['data']]
+#     return event_insts
+# def makeMap(event_insts):
+#     """Parameters: valid list of event instances, Return: none, Use: plots points on a map, NOT FINISHED"""
+#     latitude = []
+#     longitude = []
+#     for x in event_insts:
+#         if (x.lat != None) and (x.long != None):
+#             latitude.append(x.lat)
+#             longitude.append(x.long)
+#     gmap = gmplot.GoogleMapPlotter(latitude[0], longitude[0], 16)
+#     gmap.plot(latitude, longitude, '#FF6666', edge_width = 75)
+#     #gmap.scatter(latitude, longitude, '#FF6666', marker = True)
+#     gmap.draw('eventsmap.html')
+#     return
 def makePostInstances():
+    """Parameters: none, Return: list of post instances, Use: creates a list of post instances based on the authenticating user’s data"""
     baseurl = 'https://graph.facebook.com/me/feed'
     posts=makeFacebookRequest(baseurl, {'limit':100, 'fields':'comments,likes,name,created_time'}).text.encode('utf-8')
     my_personal_feed=json.loads(posts)
     post_insts=[Post(x) for x in my_personal_feed['data']]
     return post_insts
 def convertToDayOfWeek(dateTimeString):
+    """Parameters: a date time string from facebook, Return: the day of the week, Use: takes in a date time string from facebook and converts it into the day of the week (Mon, Tue, etc)
+    Reference: https://stackoverflow.com/questions/9847213/how-do-i-get-the-day-of-week-given-a-date-in-python"""
     splitString = dateTimeString.split('-')
     year = int(splitString[0])
     month = int(splitString[1])
@@ -169,14 +177,8 @@ def convertToDayOfWeek(dateTimeString):
     DayL = ['Mon','Tues','Wednes','Thurs','Fri','Satur','Sun']
     date = DayL[datetime.date(year,month,day).weekday()] + 'day'
     return date
-def dictPostsByDay(post_insts):
-    dictPosts = {}
-    for x in post_insts:
-        createdTime = x.created
-        dayOfWeek = convertToDayOfWeek(createdTime)
-        dictPosts[dayOfWeek] = dictPosts.get(dayOfWeek, 0) + 1
-    return dictPosts
 def dictPostsByDayTime(post_insts):
+    """Parameters: list of post instances, Return: dictionary of posts by time, Use: takes in post instances and sorts them based on day and then time of day, accumulating them in the dictionary"""
     dictPostsTime = {}
     for x in post_insts:
         createdHour = x.hour
@@ -191,14 +193,13 @@ def dictPostsByDayTime(post_insts):
             createdString = createdDay + '18:00 - 23:59'
         dictPostsTime[createdString] = dictPostsTime.get(createdString, 0) + 1
     return dictPostsTime
-def facebookGraph():
+def facebookGraph(postInstances):
+    """Parameters: list of post instances, Return: none, Use: uses helper functions above to create/update SQL table, grab posts, and create a graph for plot.ly, Reference: https://plot.ly/python/pie-charts/"""
     createSQL()
-    postInstances = makePostInstances()
     sqlTable(postInstances)
     dictPosts = dictPostsByDayTime(postInstances)
     plotly.tools.set_credentials_file(username = 'jackclegg2', api_key = 'B3K9rQ0xP0e9RQYjtDvT')
     fbKeys, fbValues = zip(*dictPosts.items())
     trace = go.Pie(labels = fbKeys, values = fbValues)
     py.iplot([trace], filename = 'fbattempt')
-    print ("Created pie chart of Facebook activity by day! View at the link here: https://plot.ly/~jackclegg2/2/")
-facebookGraph()
+    print ("\nCreated pie chart of Facebook activity by day and time! View at the link here: https://plot.ly/~jackclegg2/2/")
